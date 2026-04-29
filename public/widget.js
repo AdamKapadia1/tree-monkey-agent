@@ -496,12 +496,13 @@
 
   function handleUsePhoto() {
     if (!quickCapture) return;
+    const capture = quickCapture; // snapshot before closeCameraModal wipes state
     closeCameraModal();
     if (!isOpen) togglePanel();
     document.getElementById('kdk-qrs').style.display = 'none';
-    addPhotoMsg(quickCapture.dataUrl);
+    addPhotoMsg(capture.dataUrl);
     callAPI('Please analyse this tree photo and provide a full arboricultural identification and condition report.', {
-      base64: quickCapture.base64, mediaType: quickCapture.mediaType,
+      base64: capture.base64, mediaType: capture.mediaType,
     });
   }
 
@@ -546,11 +547,12 @@
 
   function handleAnalyseScan() {
     if (scanCaptures.length < 3) return;
+    const captures = [...scanCaptures]; // snapshot before closeCameraModal wipes state
     closeCameraModal();
     if (!isOpen) togglePanel();
     document.getElementById('kdk-qrs').style.display = 'none';
-    addScanPreviewMsg(scanCaptures);
-    callScanAPI(scanCaptures);
+    addScanPreviewMsg(captures);
+    callScanAPI(captures);
   }
 
   // ── Shared capture ─────────────────────────────────────────────────────────
