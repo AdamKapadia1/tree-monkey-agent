@@ -6,7 +6,8 @@
 
 import { runAgent } from '../lib/claude.js';
 import { createEnquiry, upsertSession, getSession } from '../lib/supabase.js';
-import { sendBookingConfirmation, sendOpsAlert } from '../lib/email.js';
+import { sendQuoteEmail, sendOpsAlert } from '../lib/email.js';
+import { sendSMSConfirmation } from '../lib/sms.js';
 import { checkTPOStatus } from '../lib/tpo.js';
 import { randomUUID } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
@@ -316,21 +317,35 @@ async function chatbotToolHandler(toolName, input) {
       const urgencyFlag = input.isEmergency ? 'EMERGENCY - ' : '';
       const tpoFlag = input.tpoRisk ? '\nTPO RISK FLAGGED - confirm council consent before proceeding.\n' : '';
 
-      // Send emails independently so a failure doesn't block the booking confirmation
-      sendOpsAlert({
-        subject: `${urgencyFlag}New tree surgery enquiry #${enquiry.id} - ${input.postcode}`,
-        body: `${tpoFlag}Name: ${input.name}\nPhone: ${input.phone}\nEmail: ${input.email}\nPostcode: ${input.postcode}\nWork required: ${input.workRequired}\nSpecies: ${input.treeSpecies || 'Unknown'}\nHeight: ${input.treeHeight || 'Unknown'}\nAccess: ${input.accessDetails || 'Not specified'}\nPreferred date: ${input.preferredDate || 'Flexible'}\nPhoto analysis: ${input.photoAnalysis || 'No photo provided'}\nSource: Tree Monkey chatbot`,
-      }).catch(e => console.error('[Email] Ops alert failed:', e.message));
+      // SMS confirmation to customer's phone number
+      sendSMSConfirmation({
+        name: input.name,
+        phone: input.phone,
+        enquiryId: enquiry.id,
+        workRequired: input.workRequired,
+        preferredDate: input.preferredDate || null,
+      }).catch(e => console.error('[SMS] Confirmation failed:', e.message));
 
-      sendBookingConfirmation({
+      // Detailed quote email to customer
+      sendQuoteEmail({
         id: enquiry.id,
         customer_name: input.name,
         email: input.email,
         work_required: input.workRequired,
+        tree_species: input.treeSpecies || null,
+        tree_height: input.treeHeight || null,
+        access_details: input.accessDetails || null,
         preferred_date: input.preferredDate || null,
         postcode: input.postcode,
         tpo_risk: input.tpoRisk || false,
-      }).catch(e => console.error('[Email] Customer confirmation failed:', e.message));
+        photo_analysis: input.photoAnalysis || null,
+      }).catch(e => console.error('[Email] Quote email failed:', e.message));
+
+      // Ops alert to John / Adam
+      sendOpsAlert({
+        subject: `${urgencyFlag}New enquiry #${enquiry.id} - ${input.postcode}`,
+        body: `${tpoFlag}Name: ${input.name}\nPhone: ${input.phone}\nEmail: ${input.email}\nPostcode: ${input.postcode}\nWork required: ${input.workRequired}\nSpecies: ${input.treeSpecies || 'Unknown'}\nHeight: ${input.treeHeight || 'Unknown'}\nAccess: ${input.accessDetails || 'Not specified'}\nPreferred date: ${input.preferredDate || 'Flexible'}\nPhoto analysis: ${input.photoAnalysis || 'No photo provided'}\nSource: Tree Monkey chatbot`,
+      }).catch(e => console.error('[Email] Ops alert failed:', e.message));
 
       return JSON.stringify({
         success: true,
