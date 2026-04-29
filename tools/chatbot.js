@@ -316,12 +316,13 @@ async function chatbotToolHandler(toolName, input) {
       const urgencyFlag = input.isEmergency ? 'EMERGENCY - ' : '';
       const tpoFlag = input.tpoRisk ? '\nTPO RISK FLAGGED - confirm council consent before proceeding.\n' : '';
 
-      await sendOpsAlert({
+      // Send emails independently so a failure doesn't block the booking confirmation
+      sendOpsAlert({
         subject: `${urgencyFlag}New tree surgery enquiry #${enquiry.id} - ${input.postcode}`,
         body: `${tpoFlag}Name: ${input.name}\nPhone: ${input.phone}\nEmail: ${input.email}\nPostcode: ${input.postcode}\nWork required: ${input.workRequired}\nSpecies: ${input.treeSpecies || 'Unknown'}\nHeight: ${input.treeHeight || 'Unknown'}\nAccess: ${input.accessDetails || 'Not specified'}\nPreferred date: ${input.preferredDate || 'Flexible'}\nPhoto analysis: ${input.photoAnalysis || 'No photo provided'}\nSource: Tree Monkey chatbot`,
-      });
+      }).catch(e => console.error('[Email] Ops alert failed:', e.message));
 
-      await sendBookingConfirmation({
+      sendBookingConfirmation({
         id: enquiry.id,
         customer_name: input.name,
         email: input.email,
@@ -329,7 +330,7 @@ async function chatbotToolHandler(toolName, input) {
         preferred_date: input.preferredDate || null,
         postcode: input.postcode,
         tpo_risk: input.tpoRisk || false,
-      });
+      }).catch(e => console.error('[Email] Customer confirmation failed:', e.message));
 
       return JSON.stringify({
         success: true,
