@@ -7,6 +7,7 @@
 import { runAgent } from '../lib/claude.js';
 import { createEnquiry, upsertSession, getSession } from '../lib/supabase.js';
 import { sendBookingConfirmation, sendOpsAlert } from '../lib/email.js';
+import { checkTPOStatus } from '../lib/tpo.js';
 import { randomUUID } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -114,6 +115,17 @@ const CHATBOT_TOOLS = [
         photoAnalysis: { type: 'string' },
       },
       required: ['name', 'phone', 'email', 'postcode', 'workRequired'],
+    },
+  },
+  {
+    name: 'check_tpo_status',
+    description: 'Live lookup of Tree Preservation Orders and conservation area status for a UK postcode using government planning data. Call this whenever the customer provides a postcode and asks about TPOs, conservation areas, or whether they need permission for tree work.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        postcode: { type: 'string', description: 'UK postcode to check, e.g. HP23 5AB' },
+      },
+      required: ['postcode'],
     },
   },
   {
@@ -282,6 +294,15 @@ async function chatbotToolHandler(toolName, input) {
     }
   }
 
+  if (toolName === 'check_tpo_status') {
+    try {
+      const result = await checkTPOStatus(input.postcode);
+      return result.summary;
+    } catch (err) {
+      return `Unable to complete live TPO check for ${input.postcode}: ${err.message}. Please advise the customer to contact their local planning authority directly, or call Tree Monkey Tree Care on 01442 733249 for guidance.`;
+    }
+  }
+
   if (toolName === 'escalate_emergency') {
     try {
       await sendOpsAlert({
@@ -342,10 +363,13 @@ PRICING:
 - Never give a single fixed price — always give a range
 
 TPO GUIDANCE:
-- Oak, Ash, Beech, Yew, Lime, Elm, and mature/large trees commonly have TPOs
-- Conservation area trees require 6 weeks notice to council before any work
-- Direct customers to check planning.gov.uk or their local council portal to confirm TPO status
-- Tree Monkey can assist with TPO applications
+- Whenever a customer provides a postcode and asks about TPOs, permissions, conservation areas, or whether they need consent — call check_tpo_status immediately
+- Also call check_tpo_status proactively when booking a job involving Oak, Ash, Beech, Yew, Lime, Elm, or any mature/large tree, once you have their postcode
+- Present the results clearly and explain the legal implications
+- Conservation area: 6 weeks written notice required to local council before any work
+- TPO: written consent from local planning authority required before any work; unlimited fine for unauthorised work
+- Tree Monkey Tree Care can handle TPO applications and consent paperwork on the customer's behalf
+- Always include the data caveat: coverage is not complete for all councils, so a negative result should be confirmed with the local authority before work commences
 
 BOOKING FLOW - collect conversationally, one or two questions at a time:
 1. Full name
