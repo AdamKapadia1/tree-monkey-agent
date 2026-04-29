@@ -471,10 +471,22 @@ IMPORTANT RULES:
     messages,
     CHATBOT_TOOLS,
     chatbotToolHandler,
-    { maxTokens: 2048, systemOverride: SYSTEM }
+    { maxTokens: 4096, systemOverride: SYSTEM }
   );
 
-  await upsertSession(sid, updatedMessages, { source: 'web', lastActive: new Date().toISOString() });
+  // Strip base64 image data before persisting to Supabase — images can be
+  // hundreds of KB and are not needed in subsequent conversation turns.
+  const messagesForSession = updatedMessages.map(msg => {
+    if (!Array.isArray(msg.content)) return msg;
+    return {
+      ...msg,
+      content: msg.content.map(block =>
+        block.type === 'image' ? { type: 'text', text: '[Photo provided by customer]' } : block
+      ),
+    };
+  });
+
+  await upsertSession(sid, messagesForSession, { source: 'web', lastActive: new Date().toISOString() });
 
   return { reply: text, sessionId: sid };
 }
