@@ -375,9 +375,22 @@ export async function handleChatMessage(message, sessionId = null, imageData = n
   const tomorrowStr = new Date(today.getTime() + 86400000).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const todayISO = today.toISOString().split('T')[0];
 
-  // imageData = { base64, mediaType } from direct upload, or null
+  // imageData: null | { base64, mediaType } | [{ base64, mediaType }, ...]
   let userContent;
-  if (imageData?.base64) {
+  if (Array.isArray(imageData) && imageData.length > 0) {
+    // 3-shot scan: interleave each image with its label so Claude knows the view
+    const labels = [
+      'IMAGE 1 OF 3 — CROWN VIEW (canopy and top branches)',
+      'IMAGE 2 OF 3 — TRUNK VIEW (main stem at mid-height)',
+      'IMAGE 3 OF 3 — BASE VIEW (root zone and ground level)',
+    ];
+    userContent = [];
+    imageData.forEach((img, i) => {
+      userContent.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType || 'image/jpeg', data: img.base64 } });
+      userContent.push({ type: 'text', text: labels[i] || `Image ${i + 1}` });
+    });
+    userContent.push({ type: 'text', text: message });
+  } else if (imageData?.base64) {
     userContent = [
       { type: 'image', source: { type: 'base64', media_type: imageData.mediaType || 'image/jpeg', data: imageData.base64 } },
       { type: 'text', text: message },
@@ -412,6 +425,13 @@ PHOTO ANALYSIS — TWO SCENARIOS:
    Then call estimate_work_cost for the primary recommended work.
    Where a feature is not visible in the image, state "not visible in image" — never guess.
 2. Customer provides a photo URL in text: Call the analyse_tree_photo tool, which will produce the same structured report.
+3. THREE-IMAGE SCAN (images labelled crown view / trunk view / base view): This is the most comprehensive assessment mode. Draw from all three images:
+   - Section 1 Species ID: use all three views — crown silhouette, bark detail on trunk, root flare at base
+   - Section 2 Morphological: crown form from image 1, bark/trunk detail from image 2, root flare and basal features from image 3
+   - Section 4 Health: crown dieback from image 1, trunk defects and fungal bodies from image 2, basal decay and root damage from image 3
+   - Note in the opening of your response that this is a 3-view scan and therefore more diagnostically comprehensive than a single photo
+   - The assessment should be notably more thorough — use all available evidence from all three images
+   - Still follow the same 7-section structure
 
 PRICING:
 - Always use estimate_work_cost tool when asked about cost or after analysing a photo
