@@ -166,18 +166,18 @@ async function fetchTrustpilotReviews() {
 
 async function classifyAndDraft(review) {
   const prompt = `
-Review for RL Skip Hire High Wycombe:
+Review for Tree Monkey Tree Care Ltd:
 Author: ${review.author}
 Rating: ${review.rating}/5
 Text: "${review.body}"
 
 1. Classify sentiment: positive, neutral, or negative
-2. Draft a professional, warm reply from RL Skip Hire (max 80 words). Use British English. Thank them by name. If negative, acknowledge the issue, apologise sincerely, and invite them to call 01494 853085.
+2. Draft a professional, warm reply from Tree Monkey Tree Care (max 80 words). Use British English. Thank them by name. If negative, acknowledge the issue, apologise sincerely, and invite them to call 01442 733249.
 
 Respond as JSON: {"sentiment": "...", "draftReply": "..."}
   `.trim();
 
-  const raw = await complete(prompt, 'You are a reputation manager for RL Skip Hire High Wycombe. Respond only with valid JSON.');
+  const raw = await complete(prompt, 'You are a reputation manager for Tree Monkey Tree Care Ltd, a family-run tree surgery company in Tring, Hertfordshire. Respond only with valid JSON.');
 
   try {
     const clean = raw.replace(/```json|```/g, '').trim();

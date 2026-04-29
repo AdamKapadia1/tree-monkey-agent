@@ -1,130 +1,79 @@
 /**
- * Database migration — creates all required Supabase tables.
- * Run once: node scripts/migrate.js
+ * Database migration — creates all required Supabase tables for Tree Monkey Tree Care.
+ * Paste each SQL block into the Supabase Dashboard SQL Editor and run.
  */
-
-import 'dotenv/config';
-import { supabase } from '../lib/supabase.js';
 
 const migrations = [
   {
-    name: 'bookings',
+    name: 'enquiries',
     sql: `
-      CREATE TABLE IF NOT EXISTS bookings (
-        id            BIGSERIAL PRIMARY KEY,
-        customer_name TEXT NOT NULL,
-        phone         TEXT NOT NULL,
-        email         TEXT NOT NULL,
-        postcode      TEXT NOT NULL,
-        skip_size     TEXT NOT NULL,
-        delivery_date DATE NOT NULL,
-        on_road       BOOLEAN DEFAULT FALSE,
-        waste_description TEXT,
-        permit_required   BOOLEAN DEFAULT FALSE,
-        status        TEXT DEFAULT 'pending',
-        source        TEXT DEFAULT 'web',
-        created_at    TIMESTAMPTZ DEFAULT NOW(),
-        updated_at    TIMESTAMPTZ
-      );
-      CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(delivery_date);
-      CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
-    `,
-  },
-  {
-    name: 'job_sheets',
-    sql: `
-      CREATE TABLE IF NOT EXISTS job_sheets (
-        id          BIGSERIAL PRIMARY KEY,
-        booking_id  BIGINT REFERENCES bookings(id),
-        driver_id   TEXT,
-        status      TEXT DEFAULT 'pending',
-        photos      JSONB DEFAULT '[]',
-        driver_notes TEXT,
-        completed_at TIMESTAMPTZ,
-        created_at  TIMESTAMPTZ DEFAULT NOW(),
-        updated_at  TIMESTAMPTZ
-      );
-      CREATE INDEX IF NOT EXISTS idx_job_sheets_driver ON job_sheets(driver_id);
-      CREATE INDEX IF NOT EXISTS idx_job_sheets_booking ON job_sheets(booking_id);
-    `,
+CREATE TABLE IF NOT EXISTS enquiries (
+  id              BIGSERIAL PRIMARY KEY,
+  customer_name   TEXT NOT NULL,
+  phone           TEXT NOT NULL,
+  email           TEXT NOT NULL,
+  postcode        TEXT NOT NULL,
+  work_required   TEXT NOT NULL,
+  tree_species    TEXT,
+  tree_height     TEXT,
+  access_details  TEXT,
+  tpo_risk        BOOLEAN DEFAULT FALSE,
+  is_emergency    BOOLEAN DEFAULT FALSE,
+  photo_analysis  TEXT,
+  preferred_date  DATE,
+  status          TEXT DEFAULT 'pending',
+  source          TEXT DEFAULT 'web',
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_enquiries_status   ON enquiries(status);
+CREATE INDEX IF NOT EXISTS idx_enquiries_postcode ON enquiries(postcode);
+CREATE INDEX IF NOT EXISTS idx_enquiries_created  ON enquiries(created_at DESC);
+    `.trim(),
   },
   {
     name: 'chat_sessions',
     sql: `
-      CREATE TABLE IF NOT EXISTS chat_sessions (
-        id        TEXT PRIMARY KEY,
-        messages  TEXT DEFAULT '[]',
-        metadata  JSONB DEFAULT '{}',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `,
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id          TEXT PRIMARY KEY,
+  messages    TEXT DEFAULT '[]',
+  metadata    JSONB DEFAULT '{}',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+    `.trim(),
   },
   {
     name: 'reviews',
     sql: `
-      CREATE TABLE IF NOT EXISTS reviews (
-        id           BIGSERIAL PRIMARY KEY,
-        external_id  TEXT UNIQUE NOT NULL,
-        source       TEXT NOT NULL,
-        author       TEXT,
-        rating       INTEGER,
-        body         TEXT,
-        sentiment    TEXT,
-        draft_reply  TEXT,
-        status       TEXT DEFAULT 'pending_approval',
-        published_at TIMESTAMPTZ,
-        fetched_at   TIMESTAMPTZ DEFAULT NOW(),
-        approved_at  TIMESTAMPTZ
-      );
-      CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(status);
-    `,
-  },
-  {
-    name: 'permit_applications',
-    sql: `
-      CREATE TABLE IF NOT EXISTS permit_applications (
-        id               BIGSERIAL PRIMARY KEY,
-        booking_id       BIGINT REFERENCES bookings(id),
-        council          TEXT,
-        postcode         TEXT,
-        street_address   TEXT,
-        application_ref  TEXT,
-        status           TEXT DEFAULT 'submitted',
-        submitted_at     TIMESTAMPTZ DEFAULT NOW(),
-        expiry_date      DATE
-      );
-      CREATE INDEX IF NOT EXISTS idx_permits_expiry ON permit_applications(expiry_date);
-      CREATE INDEX IF NOT EXISTS idx_permits_status ON permit_applications(status);
-    `,
+CREATE TABLE IF NOT EXISTS reviews (
+  id           BIGSERIAL PRIMARY KEY,
+  external_id  TEXT UNIQUE NOT NULL,
+  source       TEXT NOT NULL,
+  author       TEXT,
+  rating       INTEGER,
+  body         TEXT,
+  sentiment    TEXT,
+  draft_reply  TEXT,
+  status       TEXT DEFAULT 'pending_approval',
+  published_at TIMESTAMPTZ,
+  fetched_at   TIMESTAMPTZ DEFAULT NOW(),
+  approved_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(status);
+    `.trim(),
   },
 ];
 
-async function migrate() {
-  console.log('Running RL Skip Hire Agent database migrations...\n');
+console.log('Tree Monkey Tree Care — Supabase SQL\n');
+console.log('Paste each block into: Supabase Dashboard > SQL Editor > New Query\n');
+console.log('='.repeat(60));
 
-  for (const migration of migrations) {
-    process.stdout.write(`  Creating table: ${migration.name}... `);
-    // Supabase REST API doesn't expose raw SQL — run via supabase.from checks
-    // For actual migrations, use Supabase Dashboard SQL editor or supabase CLI
-    console.log('SQL ready (run in Supabase Dashboard SQL editor)');
-  }
+migrations.forEach(m => {
+  console.log(`\n-- ${m.name.toUpperCase()}\n`);
+  console.log(m.sql);
+  console.log();
+});
 
-  console.log('\n─────────────────────────────────────────────');
-  console.log('INSTRUCTIONS:');
-  console.log('1. Open your Supabase Dashboard');
-  console.log('2. Go to SQL Editor');
-  console.log('3. Run the SQL for each table above');
-  console.log('4. Create a "job-photos" storage bucket (public)');
-  console.log('─────────────────────────────────────────────\n');
-
-  // Print all SQL for easy copy-paste
-  console.log('─── Full SQL to run in Supabase ─────────────\n');
-  migrations.forEach(m => {
-    console.log(`-- ${m.name.toUpperCase()}`);
-    console.log(m.sql.trim());
-    console.log();
-  });
-}
-
-migrate().catch(console.error);
+console.log('='.repeat(60));
+console.log('\nDone. Run each block in order: enquiries, chat_sessions, reviews.\n');

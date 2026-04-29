@@ -5,7 +5,7 @@
  */
 
 import { runAgent } from '../lib/claude.js';
-import { createBooking, upsertSession, getSession } from '../lib/supabase.js';
+import { createEnquiry, upsertSession, getSession } from '../lib/supabase.js';
 import { sendBookingConfirmation, sendOpsAlert } from '../lib/email.js';
 import { randomUUID } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
@@ -176,40 +176,44 @@ async function chatbotToolHandler(toolName, input) {
 
   if (toolName === 'confirm_booking') {
     try {
-      const bookingData = {
-        customer_name: input.name,
+      const enquiry = await createEnquiry({
+        name: input.name,
         phone: input.phone,
         email: input.email,
         postcode: input.postcode,
-        skip_size: 'site-visit',
-        delivery_date: input.preferredDate || new Date().toISOString().split('T')[0],
-        on_road: false,
-        waste_description: input.workRequired,
-      };
+        workRequired: input.workRequired,
+        treeSpecies: input.treeSpecies,
+        treeHeight: input.treeHeight,
+        accessDetails: input.accessDetails,
+        tpoRisk: input.tpoRisk,
+        isEmergency: input.isEmergency,
+        photoAnalysis: input.photoAnalysis,
+        preferredDate: input.preferredDate,
+        source: 'web',
+      });
 
-      const booking = await createBooking(bookingData);
-      const urgencyFlag = input.isEmergency ? '🚨 EMERGENCY - ' : '';
-      const tpoFlag = input.tpoRisk ? '\n⚠️ TPO RISK FLAGGED - confirm council consent before proceeding.\n' : '';
+      const urgencyFlag = input.isEmergency ? 'EMERGENCY - ' : '';
+      const tpoFlag = input.tpoRisk ? '\nTPO RISK FLAGGED - confirm council consent before proceeding.\n' : '';
 
       await sendOpsAlert({
-        subject: `${urgencyFlag}New tree surgery enquiry #${booking.id} - ${input.postcode}`,
+        subject: `${urgencyFlag}New tree surgery enquiry #${enquiry.id} - ${input.postcode}`,
         body: `${tpoFlag}Name: ${input.name}\nPhone: ${input.phone}\nEmail: ${input.email}\nPostcode: ${input.postcode}\nWork required: ${input.workRequired}\nSpecies: ${input.treeSpecies || 'Unknown'}\nHeight: ${input.treeHeight || 'Unknown'}\nAccess: ${input.accessDetails || 'Not specified'}\nPreferred date: ${input.preferredDate || 'Flexible'}\nPhoto analysis: ${input.photoAnalysis || 'No photo provided'}\nSource: Tree Monkey chatbot`,
       });
 
       await sendBookingConfirmation({
-        ...booking,
+        id: enquiry.id,
         customer_name: input.name,
         email: input.email,
-        skip_size: input.workRequired,
-        delivery_date: input.preferredDate || new Date().toISOString().split('T')[0],
+        work_required: input.workRequired,
+        preferred_date: input.preferredDate || null,
         postcode: input.postcode,
-        on_road: input.tpoRisk || false,
+        tpo_risk: input.tpoRisk || false,
       });
 
       return JSON.stringify({
         success: true,
-        bookingId: booking.id,
-        message: `Enquiry confirmed. Reference #${booking.id}. Confirmation sent to ${input.email}. The Tree Monkey Tree Care team will be in touch to arrange your free site visit.`,
+        enquiryId: enquiry.id,
+        message: `Enquiry confirmed. Reference #${enquiry.id}. Confirmation sent to ${input.email}. The Tree Monkey Tree Care team will be in touch to arrange your free site visit.`,
       });
     } catch (err) {
       return JSON.stringify({ success: false, error: err.message });
