@@ -1,0 +1,209 @@
+/**
+ * Tool 08 — Driver job sheet & photo logging
+ * Creates job sheets, handles photo uploads, generates AI descriptions,
+ * produces PDF job completion reports.
+ */
+
+import { createJobSheet, updateJobSheet, getJobSheetsByDriver } from '../lib/supabase.js';
+import { client } from '../lib/claude.js';
+import PDFDocument from 'pdfkit';
+import { createWriteStream, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ─── Photo Analysis ───────────────────────────────────────────────────────────
+
+/**
+ * Analyse a job photo using Claude Vision and generate a description.
+ */
+async function analyseJobPhoto(base64Image, contentType, context) {
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 300,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: contentType, data: base64Image },
+          },
+          {
+            type: 'text',
+            text: `You are documenting a skip hire job for RL Skip Hire High Wycombe.
+Context: ${context}
+Describe what you see in this photo in 2-3 factual sentences for a job record.
+Note: skip placement, access, loading level, any issues or hazards visible.
+Be concise and professional.`,
+          },
+        ],
+      },
+    ],
+  });
+
+  return response.content.find(b => b.type === 'text')?.text || 'Photo recorded.';
+}
+
+// ─── Photo Upload to Supabase Storage ────────────────────────────────────────
+
+async function uploadPhoto(jobSheetId, photoBuffer, filename, contentType) {
+  const { supabase } = await import('../lib/supabase.js');
+  const path = `job-sheets/${jobSheetId}/${Date.now()}_${filename}`;
+
+  const { data, error } = await supabase.storage
+    .from('job-photos')
+    .upload(path, photoBuffer, { contentType, upsert: false });
+
+  if (error) throw new Error(error.message);
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('job-photos')
+    .getPublicUrl(path);
+
+  return { path, publicUrl };
+}
+
+// ─── PDF Generation ───────────────────────────────────────────────────────────
+
+export async function generateJobSheetPDF(jobSheet) {
+  const outputDir = join(__dirname, '../tmp');
+  mkdirSync(outputDir, { recursive: true });
+  const outputPath = join(outputDir, `job-sheet-${jobSheet.id}.pdf`);
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const stream = createWriteStream(outputPath);
+    doc.pipe(stream);
+
+    // Header
+    doc.fontSize(20).font('Helvetica-Bold').text('RL Skip Hire High Wycombe', { align: 'left' });
+    doc.fontSize(10).font('Helvetica').fillColor('#666').text(`01494 853085 | www.rlskiphirehighwycombe.co.uk`);
+    doc.moveDown(0.5);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#E8892A').lineWidth(2).stroke();
+    doc.moveDown(0.5);
+
+    // Title
+    doc.fontSize(16).font('Helvetica-Bold').fillColor('#E8892A').text(`Job Sheet #${jobSheet.id}`);
+    doc.fontSize(10).font('Helvetica').fillColor('#333');
+
+    // Booking details
+    const booking = jobSheet.bookings || {};
+    const fields = [
+      ['Customer', booking.customer_name || '—'],
+      ['Phone', booking.phone || '—'],
+      ['Address', booking.postcode || '—'],
+      ['Skip size', booking.skip_size || '—'],
+      ['Delivery date', booking.delivery_date || '—'],
+      ['On road', booking.on_road ? 'Yes (permit required)' : 'No (private)'],
+      ['Waste type', booking.waste_description || '—'],
+      ['Driver', jobSheet.driver_id || '—'],
+      ['Status', jobSheet.status || '—'],
+    ];
+
+    doc.moveDown(0.5);
+    fields.forEach(([label, value]) => {
+      doc.font('Helvetica-Bold').text(`${label}: `, { continued: true });
+      doc.font('Helvetica').text(value);
+    });
+
+    // Notes
+    if (jobSheet.driver_notes) {
+      doc.moveDown(0.5);
+      doc.font('Helvetica-Bold').text('Driver notes:');
+      doc.font('Helvetica').text(jobSheet.driver_notes);
+    }
+
+    // Photo log
+    if (jobSheet.photos?.length > 0) {
+      doc.moveDown(0.5);
+      doc.font('Helvetica-Bold').fillColor('#E8892A').text('Photo log:');
+      doc.font('Helvetica').fillColor('#333');
+      jobSheet.photos.forEach((photo, i) => {
+        doc.text(`Photo ${i + 1} (${photo.type}): ${photo.aiDescription || 'No description'}`);
+        doc.fillColor('#0066cc').text(photo.publicUrl, { link: photo.publicUrl });
+        doc.fillColor('#333');
+      });
+    }
+
+    // Signature line
+    doc.moveDown(2);
+    doc.moveTo(50, doc.y).lineTo(250, doc.y).strokeColor('#333').lineWidth(0.5).stroke();
+    doc.text('Driver signature', { align: 'left' });
+    doc.moveDown(0.3);
+    doc.moveTo(300, doc.y - doc.currentLineHeight()).lineTo(500, doc.y - doc.currentLineHeight()).stroke();
+    doc.text('Date', { indent: 250 });
+
+    // Footer
+    doc.fontSize(8).fillColor('#999').text(
+      `Generated by RL Skip Hire Agent | ${new Date().toLocaleString('en-GB')}`,
+      50, 770, { align: 'center' }
+    );
+
+    doc.end();
+    stream.on('finish', () => resolve(outputPath));
+    stream.on('error', reject);
+  });
+}
+
+// ─── Main Job Sheet Functions ─────────────────────────────────────────────────
+
+/**
+ * Create a new job sheet for a booking.
+ */
+export async function startJobSheet(bookingId, driverId) {
+  return createJobSheet(bookingId, driverId);
+}
+
+/**
+ * Add a photo to a job sheet with AI-generated description.
+ * @param {string} jobSheetId
+ * @param {Buffer} photoBuffer
+ * @param {string} filename
+ * @param {string} contentType
+ * @param {string} photoType - 'before' | 'after' | 'access' | 'waste'
+ */
+export async function addPhoto(jobSheetId, photoBuffer, filename, contentType, photoType = 'general') {
+  // Upload to storage
+  const { publicUrl, path } = await uploadPhoto(jobSheetId, photoBuffer, filename, contentType);
+
+  // Generate AI description
+  const base64 = photoBuffer.toString('base64');
+  const context = `This is a "${photoType}" photo for an RL Skip Hire job. Job sheet ID: ${jobSheetId}.`;
+  const aiDescription = await analyseJobPhoto(base64, contentType, context);
+
+  // Update job sheet with new photo
+  const { supabase } = await import('../lib/supabase.js');
+  const { data: existing } = await supabase.from('job_sheets').select('photos').eq('id', jobSheetId).single();
+  const photos = existing?.photos || [];
+  photos.push({ type: photoType, path, publicUrl, aiDescription, addedAt: new Date().toISOString() });
+
+  await updateJobSheet(jobSheetId, { photos });
+
+  return { publicUrl, aiDescription };
+}
+
+/**
+ * Complete a job sheet with driver notes and final status.
+ */
+export async function completeJobSheet(jobSheetId, driverNotes) {
+  const updated = await updateJobSheet(jobSheetId, {
+    status: 'completed',
+    driver_notes: driverNotes,
+    completed_at: new Date().toISOString(),
+  });
+
+  // Generate PDF
+  const pdfPath = await generateJobSheetPDF(updated);
+  console.log(`[JobSheet] PDF generated: ${pdfPath}`);
+
+  return { jobSheet: updated, pdfPath };
+}
+
+/**
+ * Get all job sheets for a driver on a given date.
+ */
+export async function getDriverJobs(driverId, date) {
+  return getJobSheetsByDriver(driverId, date);
+}

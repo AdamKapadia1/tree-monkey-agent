@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 52" width="72" height="52">
+  <!-- Main orange skip body -->
+  <polygon points="4,48 18,10 54,10 68,48" fill="#E8892A"/>
+  <!-- Right side darker panel -->
+  <polygon points="54,10 68,48 74,48 60,10" fill="#C97520"/>
+  <!-- Blue accent top right -->
+  <polygon points="46,10 60,10 63,4 49,4" fill="#1e3a6e"/>
+  <!-- Top rim -->
+  <rect x="18" y="8" width="42" height="4" rx="1" fill="#d07818"/>
+</svg>

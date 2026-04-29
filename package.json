@@ -1,0 +1,32 @@
+{
+  "name": "rl-skip-hire-agent",
+  "version": "1.0.0",
+  "description": "RL Skip Hire High Wycombe — fully automated Claude Code AI agent",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "agent": "claude --dangerously-skip-permissions",
+    "cron:dispatch": "node crons/dispatch.js",
+    "cron:reviews": "node crons/reviews.js",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@supabase/supabase-js": "^2.47.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "resend": "^4.0.0",
+    "twilio": "^5.3.7",
+    "playwright": "^1.48.0",
+    "pdfkit": "^0.15.0",
+    "sharp": "^0.33.5",
+    "node-cron": "^3.0.3",
+    "zod": "^3.23.8"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

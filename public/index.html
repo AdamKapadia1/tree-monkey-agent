@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a4a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>KDK Driver App</title>
+<link rel="manifest" href="/manifest.json">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--green:#1a4a2e;--amber:#f5a623;--light:#f8f9fa;--border:#e0e0e0;--text:#1a1a1a;--muted:#666}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--light);color:var(--text);min-height:100vh}
+  header{background:var(--green);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10}
+  header h1{font-size:17px;font-weight:600}
+  header span{font-size:12px;color:rgba(255,255,255,0.6);margin-left:auto}
+  .tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:53px;z-index:9}
+  .tab{flex:1;padding:12px;text-align:center;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s}
+  .tab.active{color:var(--green);border-bottom-color:var(--green)}
+  .page{display:none;padding:16px}
+  .page.active{display:block}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
+  .card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+  .card-title{font-size:15px;font-weight:600}
+  .badge{font-size:11px;padding:3px 8px;border-radius:20px;font-weight:500}
+  .badge-pending{background:#fff3cd;color:#856404}
+  .badge-active{background:#d1ecf1;color:#0c5460}
+  .badge-done{background:#d4edda;color:#155724}
+  .field{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:13px}
+  .field:last-child{border-bottom:none}
+  .field label{color:var(--muted)}
+  .field span{font-weight:500;text-align:right;max-width:55%}
+  .btn{display:block;width:100%;padding:12px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;text-align:center;transition:opacity .15s}
+  .btn:active{opacity:.8}
+  .btn-green{background:var(--green);color:#fff}
+  .btn-amber{background:var(--amber);color:var(--green)}
+  .btn-outline{background:#fff;color:var(--green);border:1.5px solid var(--green)}
+  .btn+.btn{margin-top:8px}
+  .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+  .photo-thumb{aspect-ratio:1;border-radius:6px;overflow:hidden;position:relative;background:#f0f0f0;cursor:pointer}
+  .photo-thumb img{width:100%;height:100%;object-fit:cover}
+  .photo-thumb .photo-type{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;padding:3px 5px;text-align:center}
+  .add-photo{border:2px dashed var(--border);border-radius:6px;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:12px;gap:4px}
+  .add-photo svg{width:24px;height:24px;stroke:var(--muted)}
+  textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;resize:none;font-family:inherit;min-height:80px;margin:8px 0}
+  textarea:focus{outline:none;border-color:var(--green)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:100;opacity:0;transition:opacity .3s;pointer-events:none}
+  .toast.show{opacity:1}
+  .date-input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:12px;font-family:inherit}
+  .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
+  .ai-desc{background:#f0f7f3;border-left:3px solid var(--green);padding:8px 10px;border-radius:0 6px 6px 0;font-size:12px;color:#2d5a3d;margin-top:6px;line-height:1.5}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;align-items:center;justify-content:center;padding:16px}
+  .modal-overlay.show{display:flex}
+  .modal{background:#fff;border-radius:12px;padding:20px;width:100%;max-width:400px}
+  .modal h3{font-size:16px;margin-bottom:12px}
+  select{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:10px}
+  .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="6" fill="#f5a623"/><text x="14" y="19" text-anchor="middle" font-family="monospace" font-weight="700" font-size="11" fill="#1a4a2e">KDK</text></svg>
+  <h1>KDK Driver App</h1>
+  <span id="driver-date"></span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('jobs')">My Jobs</div>
+  <div class="tab" onclick="showTab('photos')">Photos</div>
+  <div class="tab" onclick="showTab('waste')">Waste Check</div>
+</div>
+
+<!-- JOBS PAGE -->
+<div class="page active" id="page-jobs">
+  <input type="date" class="date-input" id="job-date" onchange="loadJobs()">
+  <div id="jobs-list"></div>
+</div>
+
+<!-- PHOTOS PAGE -->
+<div class="page" id="page-photos">
+  <div id="active-job-info" class="card" style="display:none">
+    <div class="card-header">
+      <div>
+        <div class="card-title" id="active-job-title">No active job</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px" id="active-job-sub"></div>
+      </div>
+      <span class="badge badge-active">Active</span>
+    </div>
+    <div class="photo-grid" id="photo-grid"></div>
+    <select id="photo-type-select">
+      <option value="before">Before — skip delivery</option>
+      <option value="after">After — skip collected</option>
+      <option value="access">Access / placement</option>
+      <option value="waste">Waste contents</option>
+      <option value="issue">Issue / damage</option>
+    </select>
+    <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoUpload(this)">
+    <button class="btn btn-green" onclick="document.getElementById('photo-input').click()">
+      <svg style="width:16px;height:16px;stroke:#fff;fill:none;vertical-align:middle;margin-right:6px" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg>
+      Take photo
+    </button>
+    <textarea id="driver-notes" placeholder="Driver notes — access issues, skip placement details, customer present…"></textarea>
+    <button class="btn btn-amber" onclick="completeJob()">Mark job as complete</button>
+  </div>
+  <div id="no-active-job" class="empty">Select a job from the My Jobs tab to start logging photos.</div>
+</div>
+
+<!-- WASTE CHECK PAGE -->
+<div class="page" id="page-waste">
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px">Waste classifier</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Describe the waste or take a photo to check if it can go in the skip.</p>
+    <textarea id="waste-description" placeholder="e.g. old sofa, garden cuttings, bricks, paint tins…" style="min-height:70px"></textarea>
+    <input type="file" id="waste-photo-input" accept="image/*" capture="environment" style="display:none" onchange="classifyWastePhoto(this)">
+    <button class="btn btn-green" onclick="classifyWasteText()" style="margin-bottom:8px">Check by description</button>
+    <button class="btn btn-outline" onclick="document.getElementById('waste-photo-input').click()">Check by photo</button>
+    <div id="waste-result" style="margin-top:12px;display:none"></div>
+  </div>
+</div>
+
+<!-- Photo modal -->
+<div class="modal-overlay" id="photo-modal" onclick="closePhotoModal(event)">
+  <div class="modal">
+    <h3>Photo detail</h3>
+    <img id="modal-img" style="width:100%;border-radius:8px;margin-bottom:10px" alt="">
+    <div id="modal-desc" class="ai-desc"></div>
+    <button class="btn btn-outline" style="margin-top:12px" onclick="closePhotoModal()">Close</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let activeJobSheet = null;
+let driverId = localStorage.getItem('kdk_driver_id') || promptDriverId();
+
+function promptDriverId() {
+  const id = prompt('Enter your driver ID:') || 'driver_1';
+  localStorage.setItem('kdk_driver_id', id);
+  return id;
+}
+
+// ─── Date ─────────────────────────────────────────────────────────────────────
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('job-date').value = today;
+document.getElementById('driver-date').textContent = new Date().toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function showTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['jobs','photos','waste'][i] === tab));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${tab}`).classList.add('active');
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, duration = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ─── Jobs ─────────────────────────────────────────────────────────────────────
+async function loadJobs() {
+  const date = document.getElementById('job-date').value;
+  const el = document.getElementById('jobs-list');
+  el.innerHTML = '<div class="empty">Loading jobs…</div>';
+
+  try {
+    const res = await fetch(`${API}/api/jobs/driver/${driverId}?date=${date}`);
+    const jobs = await res.json();
+
+    if (!jobs.length) {
+      el.innerHTML = '<div class="empty">No jobs scheduled for this date.</div>';
+      return;
+    }
+
+    el.innerHTML = jobs.map(job => {
+      const booking = job.bookings || {};
+      const statusClass = { pending: 'badge-pending', active: 'badge-active', completed: 'badge-done' }[job.status] || 'badge-pending';
+      return `
+        <div class="card" onclick="selectJob(${JSON.stringify(job).replace(/"/g,'&quot;')})">
+          <div class="card-header">
+            <div>
+              <div class="card-title">${booking.customer_name || 'Unknown'}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${booking.postcode || ''} · ${booking.skip_size || ''}</div>
+            </div>
+            <span class="badge ${statusClass}">${job.status}</span>
+          </div>
+          <div class="field"><label>Waste type</label><span>${booking.waste_description || 'General'}</span></div>
+          <div class="field"><label>On road</label><span>${booking.on_road ? '⚠ Yes — permit' : 'Driveway'}</span></div>
+          <div class="field"><label>Photos logged</label><span>${job.photos?.length || 0}</span></div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    el.innerHTML = `<div class="empty">Could not load jobs: ${err.message}</div>`;
+  }
+}
+
+function selectJob(job) {
+  activeJobSheet = job;
+  const booking = job.bookings || {};
+  document.getElementById('active-job-title').textContent = booking.customer_name || 'Job #' + job.id;
+  document.getElementById('active-job-sub').textContent = `${booking.postcode} · ${booking.skip_size} · Job #${job.id}`;
+  document.getElementById('active-job-info').style.display = 'block';
+  document.getElementById('no-active-job').style.display = 'none';
+  renderPhotoGrid(job.photos || []);
+  showTab('photos');
+  toast('Job selected — ready to log photos');
+}
+
+function renderPhotoGrid(photos) {
+  const grid = document.getElementById('photo-grid');
+  const items = photos.map(p => `
+    <div class="photo-thumb" onclick="showPhotoModal('${p.publicUrl}', '${(p.aiDescription||'').replace(/'/g,"\\'")}')">
+      <img src="${p.publicUrl}" alt="${p.type}" loading="lazy">
+      <div class="photo-type">${p.type}</div>
+    </div>`).join('');
+  grid.innerHTML = items + `
+    <div class="add-photo" onclick="document.getElementById('photo-input').click()">
+      <svg viewBox="0 0 24 24" fill="none"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/></svg>
+      Add photo
+    </div>`;
+}
+
+// ─── Photo upload ─────────────────────────────────────────────────────────────
+async function handlePhotoUpload(input) {
+  if (!activeJobSheet) return toast('Select a job first');
+  const file = input.files[0];
+  if (!file) return;
+
+  const photoType = document.getElementById('photo-type-select').value;
+  toast('Uploading and analysing photo…', 5000);
+
+  const base64 = await fileToBase64(file);
+  try {
+    const res = await fetch(`${API}/api/jobs/${activeJobSheet.id}/photos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: base64,
+        filename: file.name,
+        contentType: file.type,
+        photoType,
+      }),
+    });
+    const result = await res.json();
+    if (result.error) throw new Error(result.error);
+
+    // Add to local state
+    if (!activeJobSheet.photos) activeJobSheet.photos = [];
+    activeJobSheet.photos.push({
+      type: photoType,
+      publicUrl: result.publicUrl,
+      aiDescription: result.aiDescription,
+    });
+    renderPhotoGrid(activeJobSheet.photos);
+    toast('Photo added — AI description generated');
+  } catch (err) {
+    toast('Upload failed: ' + err.message);
+  }
+  input.value = '';
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ─── Complete job ─────────────────────────────────────────────────────────────
+async function completeJob() {
+  if (!activeJobSheet) return toast('No active job');
+  const notes = document.getElementById('driver-notes').value.trim();
+  if (!notes) return toast('Please add driver notes before completing');
+
+  const btn = document.querySelector('.btn-amber');
+  btn.innerHTML = '<span class="spinner"></span>Completing…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/api/jobs/${activeJobSheet.id}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverNotes: notes }),
+    });
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error);
+
+    toast('Job completed! PDF report generated.', 3000);
+    activeJobSheet = null;
+    document.getElementById('active-job-info').style.display = 'none';
+    document.getElementById('no-active-job').style.display = 'block';
+    document.getElementById('driver-notes').value = '';
+    showTab('jobs');
+    loadJobs();
+  } catch (err) {
+    toast('Error: ' + err.message);
+    btn.textContent = 'Mark job as complete';
+    btn.disabled = false;
+  }
+}
+
+// ─── Photo modal ──────────────────────────────────────────────────────────────
+function showPhotoModal(url, desc) {
+  document.getElementById('modal-img').src = url;
+  document.getElementById('modal-desc').textContent = desc || 'No AI description available.';
+  document.getElementById('photo-modal').classList.add('show');
+}
+
+function closePhotoModal(e) {
+  if (!e || e.target === document.getElementById('photo-modal')) {
+    document.getElementById('photo-modal').classList.remove('show');
+  }
+}
+
+// ─── Waste classifier ─────────────────────────────────────────────────────────
+async function classifyWasteText() {
+  const description = document.getElementById('waste-description').value.trim();
+  if (!description) return toast('Enter a description first');
+  await classifyWaste({ description });
+}
+
+async function classifyWastePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  toast('Analysing waste photo…', 5000);
+  const base64 = await fileToBase64(file);
+  const imageUrl = `data:${file.type};base64,${base64}`;
+  await classifyWaste({ imageUrl });
+  input.value = '';
+}
+
+async function classifyWaste(body) {
+  const resultEl = document.getElementById('waste-result');
+  resultEl.style.display = 'none';
+
+  try {
+    const res = await fetch(`${API}/api/waste/classify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+
+    const verdictColor = { safe: '#28a745', call_first: '#fd7e14', prohibited: '#dc3545' }[data.verdict] || '#333';
+    const verdictLabel = { safe: 'Safe for skip', call_first: 'Call KDK first', prohibited: 'Prohibited' }[data.verdict] || data.verdict;
+
+    resultEl.innerHTML = `
+      <div style="border:1.5px solid ${verdictColor};border-radius:8px;padding:12px">
+        <div style="color:${verdictColor};font-weight:600;font-size:15px;margin-bottom:6px">${verdictLabel}</div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:8px">${data.customerMessage || ''}</div>
+        ${data.ewcCodes?.length ? `<div style="font-size:11px;color:var(--muted)">EWC codes: ${data.ewcCodes.join(', ')}</div>` : ''}
+        ${data.prohibitedItems?.length ? `<div style="font-size:12px;color:#dc3545;margin-top:4px">Prohibited items: ${data.prohibitedItems.join(', ')}</div>` : ''}
+      </div>`;
+    resultEl.style.display = 'block';
+  } catch (err) {
+    toast('Classification error: ' + err.message);
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+loadJobs();
+</script>
+</body>
+</html>
