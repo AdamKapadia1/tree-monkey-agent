@@ -583,10 +583,17 @@
   function captureFrame() {
     const video = document.getElementById('kdk-cam-video');
     const canvas = document.getElementById('kdk-cam-canvas');
-    canvas.width  = video.videoWidth  || 1280;
-    canvas.height = video.videoHeight || 720;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+    const vw = video.videoWidth  || 1280;
+    const vh = video.videoHeight || 720;
+    // Cap at 1024px on the longest side — sufficient for AI analysis, keeps payload small
+    const maxDim = camMode === 'scan' ? 1024 : 1280;
+    const scale  = Math.min(1, maxDim / Math.max(vw, vh));
+    canvas.width  = Math.round(vw * scale);
+    canvas.height = Math.round(vh * scale);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Lower quality for 3-shot scan to keep combined payload under 3MB
+    const quality = camMode === 'scan' ? 0.72 : 0.88;
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
     return { dataUrl, base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' };
   }
 
@@ -719,7 +726,7 @@
     addTyping();
     try {
       const body = {
-        message: 'I have taken a guided 3-shot tree scan: crown (top), trunk (mid-height), and base (root zone). Please provide a comprehensive arboricultural identification and condition assessment, drawing from all three images for the most accurate and detailed analysis possible.',
+        message: 'I have attached three photos of the same tree in this message right now — IMAGE 1 is the crown (canopy), IMAGE 2 is the trunk (mid-height), IMAGE 3 is the base (root zone). Please analyse all three images together immediately and produce the full 7-section arboricultural assessment.',
         sessionId,
         imageBase64Array:     captures.map(c => c.base64),
         imageMediaTypeArray:  captures.map(c => c.mediaType),

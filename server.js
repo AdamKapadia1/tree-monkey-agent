@@ -53,8 +53,12 @@ app.post('/api/chat', async (req, res) => {
         base64:    b64,
         mediaType: (Array.isArray(imageMediaTypeArray) ? imageMediaTypeArray[i] : null) || 'image/jpeg',
       }));
+      console.log(`[/api/chat] 3-shot scan received: ${imageData.length} images, sizes: ${imageData.map(d => Math.round(d.base64.length / 1024) + 'KB').join(', ')}`);
     } else if (imageBase64) {
       imageData = { base64: imageBase64, mediaType: imageMediaType || 'image/jpeg' };
+      console.log(`[/api/chat] Single image received: ${Math.round(imageBase64.length / 1024)}KB`);
+    } else {
+      console.log(`[/api/chat] Text-only message: "${message?.slice(0, 60)}"`);
     }
 
     if (!message && !imageData) return res.status(400).json({ error: 'message or image is required' });
