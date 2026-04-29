@@ -144,6 +144,69 @@ const CHATBOT_TOOLS = [
   },
 ];
 
+const ARBORIST_ASSESSMENT_PROMPT = (notes = '') => `You are a senior consulting arborist and dendrologist with 30+ years experience in UK tree species. Produce a comprehensive arboricultural identification and condition assessment using the exact structure below. Where a feature is not determinable from the image, state "not visible in image" rather than guessing.
+
+─── SECTION 1: SPECIES IDENTIFICATION ─────────────────────────────
+Primary ID: [Common name] ([Latin binomial]) — [X]% confidence
+Confirming features: [List the specific morphological features visible in this image that confirm the identification]
+Alternatives considered: [Any lookalike species and the specific features that rule them out]
+
+─── SECTION 2: MORPHOLOGICAL FEATURES ────────────────────────────
+Bark: [Texture, colour, fissuring pattern, scaling or plating, any notable markings]
+Crown form: [Overall shape — e.g. broadly spreading, columnar, weeping; branching pattern; crown density]
+Trunk: [Estimated girth/DBH if determinable, form, buttressing, root flare]
+Leaves/Needles: [Shape, margin type — serrate/entire/lobed, colour, surface texture, arrangement on stem — if visible]
+Fruit/Seeds/Cones: [Type, size, colour — if visible]
+Buds/Twigs: [Bud size, colour, arrangement; twig colour and texture — if visible]
+Other features: [Flowers, catkins, epicormic growth, ivy, lichen, moss — if visible]
+
+─── SECTION 3: DIMENSIONS & AGE ──────────────────────────────────
+Estimated height: [X–Y metres]
+Estimated DBH: [X cm — or "not determinable from image"]
+Estimated age: [X–Y years]
+Growth classification: [Slow / Moderate / Fast for this species in UK conditions]
+
+─── SECTION 4: HEALTH & STRUCTURAL ASSESSMENT ────────────────────
+Overall condition: [Excellent / Good / Fair / Poor / Critical]
+Crown health: [Density, die-back %, vigour]
+Structural integrity: [Assessment of trunk, scaffold branches, union angles]
+Visible defects:
+  • Dead wood: [present/absent — location and volume if present]
+  • Cracks/splits: [present/absent — describe if present]
+  • Co-dominant stems: [present/absent — describe included bark if applicable]
+  • Cavities: [present/absent — location and estimated size]
+  • Lean: [present/absent — direction and estimated degree]
+  • Basal damage: [any visible root damage, decay, mowing injury]
+Disease/pest indicators:
+  • Fungal bodies: [present/absent — species ID if possible]
+  • Cankers/lesions: [present/absent — describe]
+  • Discolouration/dieback: [present/absent — describe]
+  • Ash dieback (if Ash): [signs present/absent]
+  • Bleeding canker (if Horse Chestnut): [signs present/absent]
+Root zone: [Any visible heave, decay, severed roots, compaction, waterlogging]
+
+─── SECTION 5: RISK & URGENCY ────────────────────────────────────
+Structural risk rating: [Low / Medium / High / Very High]
+Failure potential: [What might fail, under what conditions]
+Targets at risk: [People, vehicles, buildings, overhead lines — based on visible context]
+Urgency: [Routine (annual inspection) / Soon — within 3 months / Urgent — within 1 month / Emergency — immediate action]
+Primary concern: [Single most important issue identified]
+
+─── SECTION 6: RECOMMENDED ARBORICULTURAL WORK ───────────────────
+[List each recommended operation with justification, e.g.:]
+1. [Operation] — [Reason]
+2. [Operation] — [Reason]
+Suggested timing: [When work should be carried out]
+
+─── SECTION 7: TPO & LEGAL STATUS ────────────────────────────────
+TPO likelihood: [Low / Medium / High — with reasoning based on species, apparent age, and size]
+Conservation area: [Cannot confirm without postcode — advise customer to provide postcode for live check]
+Legal note: [Specific legal requirement relevant to this species and condition]
+
+Customer notes: ${notes || 'None provided'}
+
+This report will be reviewed by qualified NPTC-trained arborists at Tree Monkey Tree Care Ltd (Tring, Hertfordshire) to prepare a site visit and written quotation.`;
+
 async function analyseTreePhoto(imageUrl, customerNotes = '') {
   const client = getAnthropic();
   let imageData;
@@ -159,28 +222,12 @@ async function analyseTreePhoto(imageUrl, customerNotes = '') {
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [{
       role: 'user',
       content: [
         { type: 'image', source: imageData },
-        {
-          type: 'text',
-          text: `You are an expert arborist with 20+ years experience in UK trees. Analyse this photo and provide:
-
-1. SPECIES: Identify the tree species (state confidence level)
-2. ESTIMATED HEIGHT: Approximate height in metres
-3. ESTIMATED AGE: Approximate age range
-4. CONDITION: Overall health (good/fair/poor/critical)
-5. VISIBLE ISSUES: Diseases, structural problems, dead wood, fungal growth, storm damage
-6. TPO RISK: Whether this tree is likely protected (Oak, Ash, Beech, Yew, mature trees commonly are)
-7. RECOMMENDED WORK: What tree surgery work appears to be needed
-8. URGENCY: Routine / Soon (3 months) / Urgent (1 month) / Emergency
-
-Customer notes: ${customerNotes || 'None provided'}
-
-Be precise and professional. If you cannot clearly identify something, state that clearly. This assessment will be used by qualified arborists to prepare a quote.`,
-        },
+        { type: 'text', text: ARBORIST_ASSESSMENT_PROMPT(customerNotes) },
       ],
     }],
   });
@@ -354,8 +401,17 @@ YOUR ROLE:
 - Escalate emergencies immediately to phone
 
 PHOTO ANALYSIS — TWO SCENARIOS:
-1. Photo uploaded directly (image appears in this message): Analyse it yourself using your vision. Identify species (with confidence), estimated height, estimated age, condition (good/fair/poor/critical), visible issues (disease, dead wood, fungal growth, structural problems), TPO risk, and recommended work with urgency. Then call estimate_work_cost for the recommended work. Present results clearly.
-2. Customer provides a photo URL in text: Call the analyse_tree_photo tool.
+1. Photo uploaded directly (image appears in this message): Produce a full arboricultural assessment using this exact structure:
+   SECTION 1 — SPECIES IDENTIFICATION: Primary ID with Latin name and confidence %, the specific morphological features that confirm it, and alternative species considered and ruled out.
+   SECTION 2 — MORPHOLOGICAL FEATURES: Bark (texture, colour, fissuring), crown form (shape, branching, density), trunk (estimated girth/DBH, buttressing, root flare), leaves/needles (shape, margin, colour, arrangement — if visible), fruit/seeds/cones (if visible), buds/twigs (if visible), other features (lichen, ivy, epicormic growth).
+   SECTION 3 — DIMENSIONS & AGE: Estimated height (metres), estimated DBH (cm), estimated age range, growth rate classification.
+   SECTION 4 — HEALTH & STRUCTURAL ASSESSMENT: Overall condition (Excellent/Good/Fair/Poor/Critical), crown health, structural integrity, visible defects (dead wood, cracks, co-dominant stems, cavities, lean, basal damage), disease/pest indicators (fungal bodies, cankers, dieback, ash dieback if Ash, bleeding canker if Horse Chestnut), root zone observations.
+   SECTION 5 — RISK & URGENCY: Structural risk rating (Low/Medium/High/Very High), failure potential, targets at risk, urgency (Routine/Soon/Urgent/Emergency), primary concern.
+   SECTION 6 — RECOMMENDED WORK: Numbered list of operations each with justification and suggested timing.
+   SECTION 7 — TPO & LEGAL STATUS: TPO likelihood with reasoning, note that postcode needed for live council check, relevant legal note.
+   Then call estimate_work_cost for the primary recommended work.
+   Where a feature is not visible in the image, state "not visible in image" — never guess.
+2. Customer provides a photo URL in text: Call the analyse_tree_photo tool, which will produce the same structured report.
 
 PRICING:
 - Always use estimate_work_cost tool when asked about cost or after analysing a photo
@@ -395,7 +451,7 @@ IMPORTANT RULES:
     messages,
     CHATBOT_TOOLS,
     chatbotToolHandler,
-    { maxTokens: 1024, systemOverride: SYSTEM }
+    { maxTokens: 2048, systemOverride: SYSTEM }
   );
 
   await upsertSession(sid, updatedMessages, { source: 'web', lastActive: new Date().toISOString() });
