@@ -695,9 +695,22 @@
 
   function formatReply(text) {
     return text
-      .replace(/—/g, '-')
+      .replace(/—/g, '–')
+      // Markdown headings (### / ## / #)
+      .replace(/^###\s+(.+)$/gm, '<strong style="font-size:13px;display:block;margin-top:8px">$1</strong>')
+      .replace(/^##\s+(.+)$/gm,  '<strong style="font-size:14px;display:block;margin-top:8px">$1</strong>')
+      .replace(/^#\s+(.+)$/gm,   '<strong style="font-size:15px;display:block;margin-top:8px">$1</strong>')
+      // Horizontal rules
+      .replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid #e8e8e8;margin:8px 0">')
+      // Bold
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '$1')
+      // Italics
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      // Markdown links [text](url) → clickable anchor
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:#2d5a1b;text-decoration:underline;word-break:break-all">$1</a>')
+      // Bare URLs not already inside an anchor
+      .replace(/(?<!href="|">)(https?:\/\/[^\s<)"]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:#2d5a1b;text-decoration:underline;word-break:break-all">$1</a>')
+      // Line breaks
       .replace(/\n/g, '<br>');
   }
 
