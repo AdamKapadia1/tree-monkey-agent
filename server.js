@@ -44,9 +44,10 @@ app.get('/health', (req, res) => res.json({ status: 'ok', agent: 'Tree Monkey Tr
 // ─── Chatbot ──────────────────────────────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, sessionId, imageUrl } = req.body;
-    if (!message) return res.status(400).json({ error: 'message is required' });
-    const result = await handleChatMessage(message, sessionId || null, imageUrl || null);
+    const { message, sessionId, imageBase64, imageMediaType } = req.body;
+    if (!message && !imageBase64) return res.status(400).json({ error: 'message or image is required' });
+    const imageData = imageBase64 ? { base64: imageBase64, mediaType: imageMediaType || 'image/jpeg' } : null;
+    const result = await handleChatMessage(message || 'Please analyse this tree photo.', sessionId || null, imageData);
     res.json(result);
   } catch (err) {
     console.error('[/api/chat]', err);

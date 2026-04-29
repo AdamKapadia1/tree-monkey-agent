@@ -29,10 +29,27 @@ const SERVICE_AREAS = [
   'mk40', 'mk41', 'mk42', 'mk43', 'mk44', 'mk45',
 ];
 
+const PRICING_GUIDE = {
+  'stump grinding': { low: 75, high: 300, note: 'per stump, depending on diameter' },
+  'crown reduction small': { low: 200, high: 450, note: 'tree up to 5m' },
+  'crown reduction medium': { low: 400, high: 750, note: 'tree 5-10m' },
+  'crown reduction large': { low: 650, high: 1400, note: 'tree over 10m' },
+  'crown lifting': { low: 150, high: 500, note: 'depending on size and access' },
+  'crown thinning': { low: 200, high: 600, note: 'depending on size' },
+  'deadwooding': { low: 150, high: 500, note: 'depending on size and volume' },
+  'tree felling small': { low: 150, high: 400, note: 'tree up to 5m' },
+  'tree felling medium': { low: 350, high: 800, note: 'tree 5-10m' },
+  'tree felling large': { low: 700, high: 2000, note: 'tree over 10m, may be more for very large specimens' },
+  'hedge trimming': { low: 150, high: 500, note: 'depending on length, height and species' },
+  'pollarding': { low: 250, high: 800, note: 'depending on size' },
+  'ash dieback': { low: 300, high: 1200, note: 'depending on extent and tree size' },
+  'emergency': { low: 500, high: 2500, note: 'emergency callout, highly variable' },
+};
+
 const CHATBOT_TOOLS = [
   {
     name: 'analyse_tree_photo',
-    description: 'Analyse a photo of a tree to identify species, estimate age/height, assess condition, and recommend work. Use when customer provides an image URL.',
+    description: 'Analyse a tree photo from a URL — fetch, identify species, estimate age/height, assess condition, recommend work. Only use this when the customer provides a URL. If a photo was uploaded directly, analyse it using your vision — do not call this tool.',
     input_schema: {
       type: 'object',
       properties: {
@@ -40,6 +57,19 @@ const CHATBOT_TOOLS = [
         customerNotes: { type: 'string', description: 'Any notes the customer provided about the tree' },
       },
       required: ['imageUrl'],
+    },
+  },
+  {
+    name: 'estimate_work_cost',
+    description: 'Provide a ballpark cost estimate for tree surgery work. Always present as a rough guide subject to site visit confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        workType: { type: 'string', description: 'Type of work e.g. crown reduction, tree felling, stump grinding' },
+        treeHeight: { type: 'string', description: 'Approximate tree height: small (<5m), medium (5-10m), large (>10m)' },
+        additionalContext: { type: 'string', description: 'Any other relevant details affecting price' },
+      },
+      required: ['workType'],
     },
   },
   {
@@ -153,6 +183,38 @@ async function chatbotToolHandler(toolName, input) {
     return result.analysis;
   }
 
+  if (toolName === 'estimate_work_cost') {
+    const work = input.workType.toLowerCase();
+    const height = (input.treeHeight || '').toLowerCase();
+
+    // Find best matching price band
+    let key = null;
+    if (work.includes('stump')) key = 'stump grinding';
+    else if (work.includes('poll')) key = 'pollarding';
+    else if (work.includes('dead')) key = 'deadwooding';
+    else if (work.includes('ash dieback') || work.includes('dieback')) key = 'ash dieback';
+    else if (work.includes('emerg')) key = 'emergency';
+    else if (work.includes('hedge')) key = 'hedge trimming';
+    else if (work.includes('lift')) key = 'crown lifting';
+    else if (work.includes('thin')) key = 'crown thinning';
+    else if (work.includes('reduc') || work.includes('crown')) {
+      key = height.includes('large') || height.includes('>10') || height.includes('10m') ? 'crown reduction large'
+          : height.includes('medium') || height.includes('5-10') ? 'crown reduction medium'
+          : 'crown reduction small';
+    } else if (work.includes('fell') || work.includes('remov')) {
+      key = height.includes('large') || height.includes('>10') || height.includes('10m') ? 'tree felling large'
+          : height.includes('medium') || height.includes('5-10') ? 'tree felling medium'
+          : 'tree felling small';
+    }
+
+    if (!key) {
+      return 'Tree surgery costs vary widely depending on species, size, access, and complexity. A free site visit is the best way to get an accurate figure — all quotes are no-obligation.';
+    }
+
+    const band = PRICING_GUIDE[key];
+    return `Ballpark estimate for ${input.workType}: **£${band.low}–£${band.high}** (${band.note}). This is a rough guide only — the exact price depends on species, access, proximity to structures, and waste disposal. Your free site visit will confirm the actual cost with a written quote. All prices exclude VAT.${input.additionalContext ? ` Note: ${input.additionalContext}` : ''}`;
+  }
+
   if (toolName === 'check_postcode_coverage') {
     const pc = input.postcode.toLowerCase().replace(/\s/g, '');
     const covered = SERVICE_AREAS.some(t => pc.startsWith(t.replace(/\s/g, '')) || pc.includes(t.replace(/\s/g, '')));
@@ -235,7 +297,7 @@ async function chatbotToolHandler(toolName, input) {
   return 'Unknown tool';
 }
 
-export async function handleChatMessage(message, sessionId = null, imageUrl = null) {
+export async function handleChatMessage(message, sessionId = null, imageData = null) {
   const sid = sessionId || randomUUID();
   const session = await getSession(sid);
   const history = session?.messages || [];
@@ -245,21 +307,13 @@ export async function handleChatMessage(message, sessionId = null, imageUrl = nu
   const tomorrowStr = new Date(today.getTime() + 86400000).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const todayISO = today.toISOString().split('T')[0];
 
+  // imageData = { base64, mediaType } from direct upload, or null
   let userContent;
-  if (imageUrl) {
-    let imageData;
-    try {
-      const res = await fetch(imageUrl);
-      const buffer = await res.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      const contentType = res.headers.get('content-type') || 'image/jpeg';
-      imageData = { type: 'base64', media_type: contentType, data: base64 };
-    } catch {
-      imageData = null;
-    }
-    userContent = imageData
-      ? [{ type: 'image', source: imageData }, { type: 'text', text: message || 'Please analyse this tree photo.' }]
-      : message;
+  if (imageData?.base64) {
+    userContent = [
+      { type: 'image', source: { type: 'base64', media_type: imageData.mediaType || 'image/jpeg', data: imageData.base64 } },
+      { type: 'text', text: message },
+    ];
   } else {
     userContent = message;
   }
@@ -272,34 +326,44 @@ You are the professional AI assistant for Tree Monkey Tree Care Ltd - a NPTC qua
 
 YOUR ROLE:
 - Answer questions about tree surgery services professionally and accurately
-- Analyse tree photos when provided - identify species, condition, recommended work
+- Analyse tree photos — identify species, estimate age and height, assess condition, flag issues, recommend work
+- Provide ballpark cost estimates using the estimate_work_cost tool
 - Guide customers through booking a free site visit
 - Flag TPO risks and conservation area obligations
 - Escalate emergencies immediately to phone
+
+PHOTO ANALYSIS — TWO SCENARIOS:
+1. Photo uploaded directly (image appears in this message): Analyse it yourself using your vision. Identify species (with confidence), estimated height, estimated age, condition (good/fair/poor/critical), visible issues (disease, dead wood, fungal growth, structural problems), TPO risk, and recommended work with urgency. Then call estimate_work_cost for the recommended work. Present results clearly.
+2. Customer provides a photo URL in text: Call the analyse_tree_photo tool.
+
+PRICING:
+- Always use estimate_work_cost tool when asked about cost or after analysing a photo
+- Present estimates as rough ballpark guides, clearly stating the final price is confirmed at free site visit
+- Never give a single fixed price — always give a range
+
+TPO GUIDANCE:
+- Oak, Ash, Beech, Yew, Lime, Elm, and mature/large trees commonly have TPOs
+- Conservation area trees require 6 weeks notice to council before any work
+- Direct customers to check planning.gov.uk or their local council portal to confirm TPO status
+- Tree Monkey can assist with TPO applications
 
 BOOKING FLOW - collect conversationally, one or two questions at a time:
 1. Full name
 2. Phone number
 3. Email address
 4. Property postcode
-5. Description of work needed (or analyse their photo if provided)
+5. Description of work needed (or analyse their photo)
 6. Tree species and approximate height (if known)
-7. Access details - vehicle access to garden, overhead lines nearby
+7. Access details - vehicle access, overhead lines nearby
 8. TPO or conservation area concerns
 9. Preferred date for free site visit
 
 Once all details collected: summarise the enquiry, confirm with customer, then call confirm_booking.
 
-PHOTO ANALYSIS:
-When a customer sends a photo, call analyse_tree_photo immediately. Present results clearly with species, height, condition, recommended work, and TPO risk. Then continue collecting booking details.
-
 IMPORTANT RULES:
-- NEVER give firm prices - all work is individually quoted after free site visit
-- Quotes are always free with no obligation
-- Flag TPO risk for Oak, Ash, Beech, Yew, Lime or any mature/prominent tree
+- Quotes and site visits are always free with no obligation
 - For emergencies (fallen tree, dangerous lean, storm damage) - call escalate_emergency and direct customer to call 07734 779 187 immediately
 - Only use phone numbers: 01442 733249 and 07734 779 187
-- NEVER invent or mention any other phone number
 - British English throughout
 - Professional, reassuring, and knowledgeable at all times`;
 
